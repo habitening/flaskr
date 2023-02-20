@@ -10,8 +10,8 @@ def test_index(client, auth):
 
     auth.login()
     response = client.get("/")
-    assert b"test title" in response.data
-    assert b"by test on 2018-01-01" in response.data
+    assert b"Log Out" in response.data
+    assert b"test wrote on 2018-01-01" in response.data
     assert b"test\nbody" in response.data
     assert b'href="/1/update"' in response.data
 
@@ -46,7 +46,7 @@ def test_exists_required(client, auth, path):
 def test_create(client, auth, app):
     auth.login()
     assert client.get("/create").status_code == 200
-    client.post("/create", data={"title": "created", "body": ""})
+    client.post("/create", data={"body": "created"})
 
     with app.app_context():
         db = get_db()
@@ -57,19 +57,19 @@ def test_create(client, auth, app):
 def test_update(client, auth, app):
     auth.login()
     assert client.get("/1/update").status_code == 200
-    client.post("/1/update", data={"title": "updated", "body": ""})
+    client.post("/1/update", data={"body": "updated"})
 
     with app.app_context():
         db = get_db()
         post = db.execute("SELECT * FROM post WHERE id = 1").fetchone()
-        assert post["title"] == "updated"
+        assert post["body"] == "updated"
 
 
 @pytest.mark.parametrize("path", ("/create", "/1/update"))
 def test_create_update_validate(client, auth, path):
     auth.login()
-    response = client.post(path, data={"title": "", "body": ""})
-    assert b"Title is required." in response.data
+    response = client.post(path, data={"body": ""})
+    assert b"Body is required." in response.data
 
 
 def test_delete(client, auth, app):
