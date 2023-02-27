@@ -3,6 +3,7 @@ import sqlite3
 import click
 from flask import current_app
 from flask import g
+import flaskr
 
 
 def get_db():
@@ -40,8 +41,11 @@ def init_db():
 @click.command("init-db")
 def init_db_command():
     """Clear existing data and create new tables."""
-    init_db()
-    click.echo("Initialized the database.")
+    # Patch Working outside of application context RuntimeError
+    app = flaskr.create_app()
+    with app.app_context():
+        init_db()
+        click.echo("Initialized the database.")
 
 
 def init_app(app):
