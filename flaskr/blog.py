@@ -24,6 +24,19 @@ def index():
     ).fetchall()
     return render_template("blog/index.html", posts=posts)
 
+@bp.route("/~<string:id>/")
+def by_author(id):
+    """Show all the posts by the specified author, most recent first."""
+    db = get_db()
+    posts = db.execute(
+        "SELECT p.id, body, created, author_id, username"
+        " FROM post p JOIN user u ON p.author_id = u.id"
+        " WHERE username = ?"
+        " ORDER BY created DESC",
+        (id,)
+    ).fetchall()
+    return render_template("blog/index.html", posts=posts)
+
 
 def get_post(id, check_author=True):
     """Get a post and its author by id.
