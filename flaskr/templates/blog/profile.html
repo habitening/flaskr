@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+
+{% block header %}
+  <h1>{% block title %}Profile{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+  <p>{{ username }}</p>
+
+  <p><a href="{{ url_for('blog.outbox', id=username) }}">Outbox</a></p>
+{% endblock %}
