@@ -25,6 +25,11 @@ def index():
     return render_template("blog/index.html", posts=posts)
 
 @bp.route("/~<string:id>/")
+def profile(id):
+    user = get_db().execute("SELECT * FROM user WHERE username = ?", (id,)).fetchone()
+    return render_template("blog/profile.html", username=user['username'])
+
+@bp.route("/~<string:id>/outbox/", endpoint='outbox')
 def by_author(id):
     """Show all the posts by the specified author, most recent first."""
     db = get_db()
