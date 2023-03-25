@@ -11,7 +11,7 @@ from flask import url_for
 from werkzeug.security import check_password_hash
 from werkzeug.security import generate_password_hash
 
-from flaskr.db import get_db
+from flaskr.jdb import get_db, get_new_id, commit
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
 
@@ -38,9 +38,11 @@ def load_logged_in_user():
     if user_id is None:
         g.user = None
     else:
-        g.user = (
-            get_db().execute("SELECT * FROM user WHERE id = ?", (user_id,)).fetchone()
-        )
+        db = get_db()
+        for u in db['users']:
+            if u['id'] == user_id:
+                g.user = u
+                break
 
 
 @bp.route("/register", methods=("GET", "POST"))
@@ -62,17 +64,18 @@ def register():
             error = "Password is required."
 
         if error is None:
-            try:
-                db.execute(
-                    "INSERT INTO user (username, password) VALUES (?, ?)",
-                    (username, generate_password_hash(password)),
-                )
-                db.commit()
-            except db.IntegrityError:
-                # The username was already taken, which caused the
-                # commit to fail. Show a validation error.
-                error = f"User {username} is already registered."
+            for u in db['users']:
+                if u['username'] == username:
+                    # The username was already taken
+                    error = f"User {username} is already registered."
+                    break
             else:
+                db['users'].append({
+                    'id': get_new_id(db['users']),
+                    'username': username,
+                    'password': generate_password_hash(password)
+                })
+                commit(db)
                 # Success, go to the login page.
                 return redirect(url_for("auth.login"))
 
@@ -89,9 +92,11 @@ def login():
         password = request.form["password"]
         db = get_db()
         error = None
-        user = db.execute(
-            "SELECT * FROM user WHERE username = ?", (username,)
-        ).fetchone()
+        user = None
+        for u in db['users']:
+            if u['username'] == username:
+                user = u
+                break
 
         if user is None:
             error = "Incorrect username."
