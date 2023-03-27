@@ -1,3 +1,5 @@
+import datetime
+
 from flask import Blueprint
 from flask import flash
 from flask import g
@@ -8,7 +10,7 @@ from flask import url_for
 from werkzeug.exceptions import abort
 
 from flaskr.auth import login_required
-from flaskr.db import get_db
+from flaskr.jdb import get_db, get_new_id, commit
 
 bp = Blueprint("blog", __name__)
 
@@ -17,11 +19,13 @@ bp = Blueprint("blog", __name__)
 def index():
     """Show all the posts, most recent first."""
     db = get_db()
-    posts = db.execute(
-        "SELECT p.id, title, body, created, author_id, username"
-        " FROM post p JOIN user u ON p.author_id = u.id"
-        " ORDER BY created DESC"
-    ).fetchall()
+    username_map = {u['id']: u['username'] for u in db['users']}
+    posts = []
+    for p in sorted(db['posts'], key=lambda p: p['created'], reverse=True):
+        post = dict(p)
+        post['created'] = datetime.datetime.fromisoformat(p['created'])
+        post['username'] = username_map[p['author_id']]
+        posts.append(post)
     return render_template("blog/index.html", posts=posts)
 
 
@@ -37,16 +41,12 @@ def get_post(id, check_author=True):
     :raise 404: if a post with the given id doesn't exist
     :raise 403: if the current user isn't the author
     """
-    post = (
-        get_db()
-        .execute(
-            "SELECT p.id, title, body, created, author_id, username"
-            " FROM post p JOIN user u ON p.author_id = u.id"
-            " WHERE p.id = ?",
-            (id,),
-        )
-        .fetchone()
-    )
+    db = get_db()
+    post = None
+    for p in db['posts']:
+        if p['id'] == id:
+            post = p
+            break
 
     if post is None:
         abort(404, f"Post id {id} doesn't exist.")
@@ -73,11 +73,14 @@ def create():
             flash(error)
         else:
             db = get_db()
-            db.execute(
-                "INSERT INTO post (title, body, author_id) VALUES (?, ?, ?)",
-                (title, body, g.user["id"]),
-            )
-            db.commit()
+            db['posts'].append({
+                'id': get_new_id(db['posts']),
+                'author_id': g.user["id"],
+                'created': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                'title': title,
+                'body': body
+            })
+            commit(db)
             return redirect(url_for("blog.index"))
 
     return render_template("blog/create.html")
@@ -101,10 +104,12 @@ def update(id):
             flash(error)
         else:
             db = get_db()
-            db.execute(
-                "UPDATE post SET title = ?, body = ? WHERE id = ?", (title, body, id)
-            )
-            db.commit()
+            for p in db['posts']:
+                if p['id'] == id:
+                    p['title'] = title
+                    p['body'] = body
+                    break
+            commit(db)
             return redirect(url_for("blog.index"))
 
     return render_template("blog/update.html", post=post)
@@ -118,8 +123,10 @@ def delete(id):
     Ensures that the post exists and that the logged in user is the
     author of the post.
     """
-    get_post(id)
     db = get_db()
-    db.execute("DELETE FROM post WHERE id = ?", (id,))
-    db.commit()
+    for i, p in enumerate(db['posts']):
+        if p['id'] == id:
+            del db['posts'][i]
+            commit(db)
+            break
     return redirect(url_for("blog.index"))
